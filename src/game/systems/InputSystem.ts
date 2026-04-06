@@ -1,3 +1,6 @@
+import type { VirtualDPad } from '@/ui/VirtualDPad';
+import type { BoostButton } from '@/ui/BoostButton';
+
 export interface InputState {
   left: boolean;
   right: boolean;
@@ -19,6 +22,10 @@ export class InputSystem {
 
   private touchIds = new Map<number, 'left' | 'right' | 'accel'>();
   private canvas: HTMLCanvasElement;
+
+  // Virtual controls (iPad)
+  private dpad: VirtualDPad | null = null;
+  private boostBtn: BoostButton | null = null;
 
   // One-shot flags: consumed after read
   private enterPressed = false;
@@ -44,7 +51,20 @@ export class InputSystem {
     // reserved for future use
   }
 
+  setVirtualControls(dpad: VirtualDPad, boostBtn: BoostButton): void {
+    this.dpad = dpad;
+    this.boostBtn = boostBtn;
+  }
+
   getState(): Readonly<InputState> {
+    // Merge virtual controls into state
+    if (this.dpad) {
+      if (this.dpad.left) this.state.left = true;
+      if (this.dpad.right) this.state.right = true;
+    }
+    if (this.boostBtn?.pressed) {
+      this.state.accelerating = true;
+    }
     return this.state;
   }
 
@@ -147,6 +167,11 @@ export class InputSystem {
   }
 
   private onPointerDown(e: PointerEvent): void {
+    // Skip canvas zone splitting when virtual controls are active
+    if (this.dpad) {
+      this.tapped = true;
+      return;
+    }
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const relX = x / rect.width;

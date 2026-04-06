@@ -6,9 +6,14 @@ import { InputSystem } from '@/game/systems/InputSystem';
 import { AudioManager } from '@/game/audio/AudioManager';
 import { SaveManager } from '@/game/storage/SaveManager';
 import { HUD } from '@/ui/HUD';
+import { VirtualDPad } from '@/ui/VirtualDPad';
+import { BoostButton } from '@/ui/BoostButton';
 import { TitleScene } from '@/game/scenes/TitleScene';
 import { StageScene } from '@/game/scenes/StageScene';
 import { ResultScene } from '@/game/scenes/ResultScene';
+
+// ── Touch device detection ──
+const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
 // ── Canvas setup ──
 const gameCanvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -37,23 +42,43 @@ sceneManager.register('title', titleScene);
 sceneManager.register('stage', stageScene);
 sceneManager.register('result', resultScene);
 
+// ── Virtual controls (touch devices only) ──
+let dpad: VirtualDPad | null = null;
+let boostBtn: BoostButton | null = null;
+const container = document.getElementById('game-container')!;
+
+if (isTouchDevice) {
+  dpad = new VirtualDPad();
+  boostBtn = new BoostButton();
+  dpad.mount(container);
+  boostBtn.mount(container);
+  dpad.show();
+  boostBtn.show();
+  inputSystem.setVirtualControls(dpad, boostBtn);
+}
+
 // ── Resize handler ──
 function resize(): void {
-  const container = document.getElementById('game-container')!;
   const containerW = container.clientWidth;
   const containerH = container.clientHeight;
 
-  // Maintain aspect ratio 480:720 = 2:3
-  const aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+  const aspect = SCREEN_WIDTH / SCREEN_HEIGHT; // 2:3
   let displayW: number;
   let displayH: number;
 
-  if (containerW / containerH > aspect) {
+  if (isTouchDevice && containerW > containerH) {
+    // iPad landscape: game fills height, centered
     displayH = containerH;
     displayW = containerH * aspect;
   } else {
-    displayW = containerW;
-    displayH = containerW / aspect;
+    // PC or portrait: fit within container
+    if (containerW / containerH > aspect) {
+      displayH = containerH;
+      displayW = containerH * aspect;
+    } else {
+      displayW = containerW;
+      displayH = containerW / aspect;
+    }
   }
 
   renderer.setSize(displayW, displayH);
@@ -63,7 +88,7 @@ function resize(): void {
   hud.resize(displayW, displayH);
   inputSystem.setCanvasWidth(displayW);
 
-  // Position HUD canvas to match game canvas
+  // Position canvases centered
   const left = (containerW - displayW) / 2;
   const top = (containerH - displayH) / 2;
   hudCanvas.style.left = `${left}px`;
