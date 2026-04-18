@@ -57,13 +57,16 @@ export class InputSystem {
   }
 
   getState(): Readonly<InputState> {
-    // Merge virtual controls into state
-    if (this.dpad) {
-      if (this.dpad.left) this.state.left = true;
-      if (this.dpad.right) this.state.right = true;
-    }
-    if (this.boostBtn?.pressed) {
-      this.state.accelerating = true;
+    if (this.dpad || this.boostBtn) {
+      // Return a merged copy without mutating keyboard state
+      return {
+        left: this.state.left || (this.dpad?.left ?? false),
+        right: this.state.right || (this.dpad?.right ?? false),
+        accelerating: this.state.accelerating || (this.boostBtn?.pressed ?? false),
+        braking: this.state.braking,
+        enter: this.state.enter,
+        escape: this.state.escape,
+      };
     }
     return this.state;
   }

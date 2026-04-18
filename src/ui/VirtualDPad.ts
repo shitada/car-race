@@ -7,6 +7,7 @@ export class VirtualDPad {
   private container: HTMLDivElement;
   private stick: HTMLDivElement;
   private active = false;
+  private touchId: number | null = null;
   private startX = 0;
   private maxDist = 40;
 
@@ -83,52 +84,76 @@ export class VirtualDPad {
   private setupEvents(): void {
     const c = this.container;
 
-    const onStart = (cx: number, _cy: number) => {
-      this.active = true;
-      const rect = c.getBoundingClientRect();
-      this.startX = rect.left + rect.width / 2;
-      this.handleMove(cx, _cy);
-    };
-
-    const onMove = (cx: number, cy: number) => {
-      if (!this.active) return;
-      this.handleMove(cx, cy);
-    };
-
     const onEnd = () => {
       this.active = false;
+      this.touchId = null;
       this.x = 0;
       this.stick.style.transform = 'translate(0, 0)';
     };
 
     c.addEventListener('touchstart', (e) => {
       e.preventDefault();
-      const t = e.touches[0];
-      if (t) onStart(t.clientX, t.clientY);
+      if (this.active) return; // already tracking a finger
+      const t = e.changedTouches[0];
+      if (!t) return;
+      this.active = true;
+      this.touchId = t.identifier;
+      const rect = c.getBoundingClientRect();
+      this.startX = rect.left + rect.width / 2;
+      this.handleMove(t.clientX);
     }, { passive: false });
 
     c.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      const t = e.touches[0];
-      if (t) onMove(t.clientX, t.clientY);
+      if (!this.active || this.touchId === null) return;
+      const t = this.findTouch(e.touches, this.touchId);
+      if (t) this.handleMove(t.clientX);
     }, { passive: false });
 
-    c.addEventListener('touchend', onEnd);
-    c.addEventListener('touchcancel', onEnd);
+    c.addEventListener('touchend', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i]!.identifier === this.touchId) {
+          onEnd();
+          return;
+        }
+      }
+    });
+    c.addEventListener('touchcancel', (e) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i]!.identifier === this.touchId) {
+          onEnd();
+          return;
+        }
+      }
+    });
 
     // Mouse fallback
-    c.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
-    window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+    c.addEventListener('mousedown', (e) => {
+      this.active = true;
+      const rect = c.getBoundingClientRect();
+      this.startX = rect.left + rect.width / 2;
+      this.handleMove(e.clientX);
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!this.active) return;
+      this.handleMove(e.clientX);
+    });
     window.addEventListener('mouseup', onEnd);
   }
 
-  private handleMove(cx: number, _cy: number): void {
+  private findTouch(touches: TouchList, id: number): Touch | null {
+    for (let i = 0; i < touches.length; i++) {
+      if (touches[i]!.identifier === id) return touches[i]!;
+    }
+    return null;
+  }
+
+  private handleMove(cx: number): void {
     let dx = cx - this.startX;
     if (Math.abs(dx) > this.maxDist) {
       dx = Math.sign(dx) * this.maxDist;
     }
     this.x = dx / this.maxDist;
-    // Only horizontal movement for this game
     this.stick.style.transform = `translate(${dx}px, 0)`;
   }
 
